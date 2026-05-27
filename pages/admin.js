@@ -1,410 +1,606 @@
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import Header from '../components/Header'
+import RatingRow from '../components/RatingRow'
+import ScoreBar from '../components/ScoreBar'
 import { supabase } from '../lib/supabase'
-import { getCategoria } from '../components/ScoreBar'
 
-const PONDERACIONES = {
-  Operativo:      { autoevaluacion: 10, jefe: 50, par: 20, kpi: 20 },
-  Administrativo: { autoevaluacion: 15, jefe: 45, par: 20, kpi: 20 },
-  Gerencial:      { autoevaluacion: 15, jefe: 35, par: 20, kpi: 30 },
+// ── Datos de competencias ──────────────────────────────────────────────────
+const COMP_ORG = [
+  { nombre: 'Compromiso y responsabilidad', detalle: 'Cumple funciones en el tiempo, forma y calidad requeridos.' },
+  { nombre: 'Trabajo en equipo', detalle: 'Colabora activamente y apoya a compañeros para lograr objetivos comunes.' },
+  { nombre: 'Orientación al cliente', detalle: 'Atiende con diligencia las necesidades del cliente interno y externo.' },
+  { nombre: 'Seguridad y calidad', detalle: 'Aplica los protocolos de seguridad y estándares de calidad de OLINSA.' },
+  { nombre: 'Actitud y adaptabilidad', detalle: 'Se adapta a cambios y mantiene actitud positiva ante retos operativos.' },
+]
+const COMP_TEC = [
+  { nombre: 'Conocimiento del cargo', detalle: 'Domina los conocimientos técnicos necesarios para su función.' },
+  { nombre: 'Calidad del trabajo', detalle: 'Sus resultados son precisos, completos y requieren pocos reprocesos.' },
+  { nombre: 'Gestión de tiempo', detalle: 'Organiza tareas eficientemente y cumple los plazos establecidos.' },
+  { nombre: 'Reporte y comunicación', detalle: 'Informa oportunamente sobre avances, fallas o novedades.' },
+  { nombre: 'Iniciativa y mejora', detalle: 'Identifica oportunidades de mejora y propone soluciones.' },
+]
+const COMP_JEFE_A = [
+  { nombre: 'Compromiso y responsabilidad', detalle: 'Cumple funciones en el tiempo, forma y calidad requeridos sin supervisión constante.' },
+  { nombre: 'Trabajo en equipo', detalle: 'Colabora, comparte información y apoya el logro de objetivos colectivos.' },
+  { nombre: 'Orientación al cliente', detalle: 'Gestiona con diligencia y soluciones efectivas las necesidades del cliente.' },
+  { nombre: 'Seguridad y calidad', detalle: 'Cumple y promueve los protocolos de seguridad y estándares de calidad.' },
+  { nombre: 'Comunicación efectiva', detalle: 'Se expresa con claridad verbal y escrita; escucha activamente.' },
+]
+const COMP_JEFE_B = [
+  { nombre: 'Dominio técnico del cargo', detalle: 'Demuestra el conocimiento técnico y normativo requerido.' },
+  { nombre: 'Calidad del trabajo', detalle: 'Produce resultados precisos y completos con bajo nivel de reproceso.' },
+  { nombre: 'Planeación y organización', detalle: 'Gestiona su tiempo y recursos de manera eficiente; cumple cronogramas.' },
+  { nombre: 'Resolución de problemas', detalle: 'Identifica problemas y propone soluciones oportunas y pertinentes.' },
+  { nombre: 'Iniciativa y mejora continua', detalle: 'Actúa proactivamente y propone mejoras sin esperar instrucciones.' },
+]
+const COMP_JEFE_C = [
+  { nombre: 'Desarrollo del equipo', detalle: 'Orienta, retroalimenta y promueve el crecimiento de su equipo.' },
+  { nombre: 'Toma de decisiones', detalle: 'Decide con oportunidad y criterio; asume responsabilidad por resultados.' },
+  { nombre: 'Gestión del clima laboral', detalle: 'Promueve un ambiente de trabajo respetuoso y de alto rendimiento.' },
+]
+const COMP_PARES_A = [
+  { nombre: 'Colaboración', detalle: 'Apoya a sus compañeros, comparte información y recursos sin dificultad.' },
+  { nombre: 'Comunicación', detalle: 'Se comunica de forma clara, respetuosa y oportuna.' },
+  { nombre: 'Confiabilidad', detalle: 'Cumple los compromisos con el equipo; es puntual en entregas y reuniones.' },
+  { nombre: 'Actitud', detalle: 'Mantiene actitud positiva y constructiva en situaciones difíciles.' },
+  { nombre: 'Respeto', detalle: 'Trata a todos con respeto y dignidad, independientemente del cargo.' },
+]
+const COMP_PARES_B = [
+  { nombre: 'Calidad del trabajo', detalle: 'Su trabajo es confiable; no genera reprocesos ni inconvenientes a otros.' },
+  { nombre: 'Proactividad', detalle: 'Identifica problemas o necesidades y actúa antes de que se le indique.' },
+  { nombre: 'Cumplimiento de responsabilidades', detalle: 'Cumple sus funciones sin necesitar recordatorios constantes.' },
+  { nombre: 'Aporte al ambiente laboral', detalle: 'Contribuye a un ambiente de trabajo positivo y motivador.' },
+  { nombre: 'Orientación al resultado', detalle: 'Mantiene el foco en los objetivos del área y apoya metas colectivas.' },
+]
+
+function avg(obj) {
+  const vals = Object.values(obj).filter(v => v > 0)
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0
 }
 
-function calcConsolidado(evals, nivel) {
-  const pond = PONDERACIONES[nivel] || PONDERACIONES.Operativo
-  const tipos = ['autoevaluacion', 'jefe', 'par', 'kpi']
-  let total = 0, pesoUsado = 0
-  tipos.forEach(t => {
-    const ev = evals.filter(e => e.tipo === t && e.puntaje_final)
-    if (ev.length === 0) return
-    const promTipo = ev.reduce((s, e) => s + e.puntaje_final, 0) / ev.length
-    total += promTipo * (pond[t] / 100)
-    pesoUsado += pond[t]
-  })
-  return pesoUsado > 0 ? (total / pesoUsado * 100).toFixed(2) : null
+// ── Formulario Autoevaluación ──────────────────────────────────────────────
+function FormAutoeval({ evaluado, onSubmit, saving }) {
+  const [ra, setRa] = useState({})
+  const [rb, setRb] = useState({})
+  const [reflexion, setReflexion] = useState({ fortaleza: '', apoyo: '', compromiso: '' })
+
+  const scoreA = avg(ra), scoreB = avg(rb)
+  const scoreTotal = [scoreA, scoreB].filter(s => s > 0)
+  const prom = scoreTotal.length ? scoreTotal.reduce((a, b) => a + b, 0) / scoreTotal.length : 0
+
+  function handleSubmit() {
+    if (Object.keys(ra).length < 5 || Object.keys(rb).length < 5) {
+      alert('Por favor califica todos los criterios antes de enviar.')
+      return
+    }
+    onSubmit({ ra, rb, reflexion, puntaje_final: parseFloat(prom.toFixed(2)) })
+  }
+
+  return (
+    <div>
+      <div className="alert alert-info">
+        Selecciona la calificación que mejor describe tu desempeño en los <strong>últimos 6 meses</strong>. No hay respuestas incorrectas.
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
+          <h2>A. Competencias Organizacionales</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_ORG.map((c, i) => (
+            <RatingRow key={i} num={i + 1} nombre={c.nombre} detalle={c.detalle}
+              value={ra[i + 1]} onChange={v => setRa({ ...ra, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
+          <h2>B. Competencias Técnicas</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_TEC.map((c, i) => (
+            <RatingRow key={i} num={i + 6} nombre={c.nombre} detalle={c.detalle}
+              value={rb[i + 1]} onChange={v => setRb({ ...rb, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
+          <h2>Reflexión Personal</h2>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[
+              ['fortaleza', '1. ¿Cuál es tu mayor fortaleza en el desempeño de tu cargo?'],
+              ['apoyo', '2. ¿En qué aspecto necesitas mayor apoyo, formación o recursos?'],
+              ['compromiso', '3. ¿Qué compromiso personal asumes para el próximo período?'],
+            ].map(([key, label]) => (
+              <div className="form-field" key={key}>
+                <label>{label}</label>
+                <textarea value={reflexion[key]} onChange={e => setReflexion({ ...reflexion, [key]: e.target.value })} placeholder="Escribe tu respuesta…" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <ScoreBar scores={{ a: scoreA, b: scoreB }} label="Puntaje Autoevaluación" />
+      </div>
+
+      <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}
+        style={{ width: '100%', justifyContent: 'center', padding: 14, fontSize: 14, marginTop: 8 }}>
+        {saving ? 'Guardando…' : 'Enviar autoevaluación ✓'}
+      </button>
+    </div>
+  )
 }
 
-export default function Admin() {
-  const [tab, setTab] = useState('dashboard')
-  const [colaboradores, setColaboradores] = useState([])
-  const [ciclos, setCiclos] = useState([])
-  const [evaluaciones, setEvaluaciones] = useState([])
+// ── Formulario Jefe ────────────────────────────────────────────────────────
+function FormJefe({ evaluado, onSubmit, saving }) {
+  const [ra, setRa] = useState({})
+  const [rb, setRb] = useState({})
+  const [rc, setRc] = useState({})
+  const [tienePersonal, setTienePersonal] = useState(true)
+  const [comentarios, setComentarios] = useState({ fortalezas: '', mejoras: '', recomendaciones: '' })
+
+  const scoreA = avg(ra), scoreB = avg(rb), scoreC = tienePersonal ? avg(rc) : 0
+  const bases = [scoreA, scoreB, ...(tienePersonal ? [scoreC] : [])].filter(s => s > 0)
+  const prom = bases.length ? bases.reduce((a, b) => a + b, 0) / bases.length : 0
+
+  function handleSubmit() {
+    const min = tienePersonal ? 13 : 10
+    if (Object.keys(ra).length < 5 || Object.keys(rb).length < 5 || (tienePersonal && Object.keys(rc).length < 3)) {
+      alert('Por favor califica todos los criterios.')
+      return
+    }
+    onSubmit({ ra, rb, rc, tienePersonal, comentarios, puntaje_final: parseFloat(prom.toFixed(2)) })
+  }
+
+  return (
+    <div>
+      <div className="alert alert-info">
+        Evalúa el desempeño de <strong>{evaluado?.nombre}</strong> basándote en comportamientos observados directamente. Sé objetivo y específico.
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
+          <h2>A. Competencias Organizacionales (40%)</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_JEFE_A.map((c, i) => (
+            <RatingRow key={i} num={i + 1} nombre={c.nombre} detalle={c.detalle}
+              value={ra[i + 1]} onChange={v => setRa({ ...ra, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
+          <h2>B. Competencias Técnicas y de Gestión (35%)</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_JEFE_B.map((c, i) => (
+            <RatingRow key={i} num={i + 6} nombre={c.nombre} detalle={c.detalle}
+              value={rb[i + 1]} onChange={v => setRb({ ...rb, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
+          <h2>C. Liderazgo y Gestión de Personas (25%)</h2>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 14px', background: '#fff8e8', borderRadius: 8, border: '1.5px dashed var(--gold)' }}>
+            <input type="checkbox" id="tienePersonal" checked={tienePersonal}
+              onChange={e => setTienePersonal(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
+            <label htmlFor="tienePersonal" style={{ cursor: 'pointer', fontSize: 13 }}>
+              Este colaborador <strong>tiene personal a cargo</strong> — evaluar sección C
+            </label>
+          </div>
+          {tienePersonal && (
+            <div style={{ padding: '0 0 8px' }}>
+              {COMP_JEFE_C.map((c, i) => (
+                <RatingRow key={i} num={i + 11} nombre={c.nombre} detalle={c.detalle}
+                  value={rc[i + 1]} onChange={v => setRc({ ...rc, [i + 1]: v })} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
+          <h2>Comentarios del Evaluador</h2>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {[
+              ['fortalezas', 'Principales fortalezas observadas en el período:'],
+              ['mejoras', 'Oportunidades de mejora más importantes:'],
+              ['recomendaciones', 'Recomendaciones para el plan de desarrollo:'],
+            ].map(([key, label]) => (
+              <div className="form-field" key={key}>
+                <label>{label}</label>
+                <textarea value={comentarios[key]} onChange={e => setComentarios({ ...comentarios, [key]: e.target.value })} placeholder="Escribe tus comentarios…" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <ScoreBar scores={{ a: scoreA, b: scoreB, ...(tienePersonal ? { c: scoreC } : {}) }} label="Puntaje Evaluación Jefe" />
+      </div>
+
+      <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}
+        style={{ width: '100%', justifyContent: 'center', padding: 14, fontSize: 14, marginTop: 8 }}>
+        {saving ? 'Guardando…' : 'Enviar evaluación ✓'}
+      </button>
+    </div>
+  )
+}
+
+// ── Formulario Pares ───────────────────────────────────────────────────────
+function FormPares({ evaluado, onSubmit, saving }) {
+  const [ra, setRa] = useState({})
+  const [rb, setRb] = useState({})
+  const [reflexion, setReflexion] = useState({ fortaleza: '', mejora: '' })
+
+  const scoreA = avg(ra), scoreB = avg(rb)
+  const bases = [scoreA, scoreB].filter(s => s > 0)
+  const prom = bases.length ? bases.reduce((a, b) => a + b, 0) / bases.length : 0
+
+  function handleSubmit() {
+    if (Object.keys(ra).length < 5 || Object.keys(rb).length < 5) {
+      alert('Por favor califica todos los criterios.')
+      return
+    }
+    onSubmit({ ra, rb, reflexion, puntaje_final: parseFloat(prom.toFixed(2)) })
+  }
+
+  return (
+    <div>
+      <div className="alert alert-info">
+        🔒 Esta evaluación es <strong>anónima y confidencial</strong>. Solo Talento Humano verá los resultados individuales. Evalúa con honestidad.
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
+          <h2>A. Trabajo en Equipo y Colaboración (50%)</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_PARES_A.map((c, i) => (
+            <RatingRow key={i} num={i + 1} nombre={c.nombre} detalle={c.detalle}
+              value={ra[i + 1]} onChange={v => setRa({ ...ra, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
+          <h2>B. Desempeño Observable Día a Día (50%)</h2>
+        </div>
+        <div className="card-body" style={{ padding: '8px 24px' }}>
+          {COMP_PARES_B.map((c, i) => (
+            <RatingRow key={i} num={i + 6} nombre={c.nombre} detalle={c.detalle}
+              value={rb[i + 1]} onChange={v => setRb({ ...rb, [i + 1]: v })} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
+          <h2>Retroalimentación Abierta (Anónima)</h2>
+        </div>
+        <div className="card-body">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="form-field">
+              <label>¿Qué valoras más del trabajo de este compañero?</label>
+              <textarea value={reflexion.fortaleza} onChange={e => setReflexion({ ...reflexion, fortaleza: e.target.value })} placeholder="Menciona las fortalezas o contribuciones que más valoras…" />
+            </div>
+            <div className="form-field">
+              <label>¿Qué aspecto le recomendarías mejorar?</label>
+              <textarea value={reflexion.mejora} onChange={e => setReflexion({ ...reflexion, mejora: e.target.value })} placeholder="Sé constructivo y específico…" />
+            </div>
+          </div>
+        </div>
+        <ScoreBar scores={{ a: scoreA, b: scoreB }} label="Puntaje Evaluación de Pares" />
+      </div>
+
+      <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}
+        style={{ width: '100%', justifyContent: 'center', padding: 14, fontSize: 14, marginTop: 8 }}>
+        {saving ? 'Guardando…' : 'Enviar evaluación ✓'}
+      </button>
+    </div>
+  )
+}
+
+// ── Formulario KPIs ────────────────────────────────────────────────────────
+function FormKPI({ evaluado, onSubmit, saving }) {
+  const NUM = 5
+  const emptyKPI = { nombre: '', formula: '', meta: '', fuente: '', peso: '', base: '', periodo: '' }
+  const [kpis, setKpis] = useState(Array(NUM).fill(null).map(() => ({ ...emptyKPI })))
+  const [fase, setFase] = useState('fase1')
+  const [resultados, setResultados] = useState(Array(NUM).fill(null).map(() => ({ real: '', pct: '' })))
+  const [comentario, setComentario] = useState('')
+
+  const totalPeso = kpis.reduce((s, k) => s + (parseFloat(k.peso) || 0), 0)
+
+  function calificacion(pct) {
+    const p = parseFloat(pct)
+    if (isNaN(p)) return null
+    if (p >= 110) return 5; if (p >= 100) return 4
+    if (p >= 85) return 3; if (p >= 70) return 2; return 1
+  }
+
+  function puntajeFinal() {
+    let sum = 0
+    resultados.forEach((r, i) => {
+      const cal = calificacion(r.pct)
+      const peso = parseFloat(kpis[i].peso) || 0
+      if (cal && peso) sum += cal * peso / 100
+    })
+    return sum
+  }
+
+  function handleSubmit() {
+    if (fase === 'fase1') {
+      if (Math.abs(totalPeso - 100) > 0.01) {
+        alert('Los pesos deben sumar exactamente 100%.')
+        return
+      }
+      const filled = kpis.filter(k => k.nombre && k.meta && k.peso)
+      if (filled.length === 0) {
+        alert('Completa al menos un KPI con nombre, meta y peso.')
+        return
+      }
+    }
+    onSubmit({ kpis, resultados, comentario, fase, puntaje_final: parseFloat(puntajeFinal().toFixed(2)) })
+  }
+
+  const calColors = { 1: '#c0392b', 2: '#e67e22', 3: '#2471a3', 4: '#27ae60', 5: '#145a32' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        {[['fase1', '📝 Fase 1: Acuerdo de metas'], ['fase2', '📊 Fase 2: Evaluación de resultados']].map(([f, lbl]) => (
+          <button key={f} type="button" onClick={() => setFase(f)}
+            className={`btn ${fase === f ? 'btn-navy' : 'btn-ghost'}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {fase === 'fase1' && (
+        <>
+          <div className="alert alert-info">
+            <strong>Fase 1 — Inicio del período:</strong> Define entre 3 y 5 KPIs. Los pesos deben sumar 100%.
+            <span style={{ marginLeft: 12, fontWeight: 700, color: Math.abs(totalPeso - 100) < 0.01 ? 'var(--green)' : 'var(--red)' }}>
+              Total: {totalPeso}%
+            </span>
+          </div>
+          {kpis.map((k, i) => (
+            <div className="card" key={i} style={{ marginBottom: 16 }}>
+              <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
+                <h2>KPI {i + 1}</h2>
+              </div>
+              <div className="card-body">
+                <div className="form-grid">
+                  <div className="form-field full">
+                    <label>Nombre del KPI</label>
+                    <input placeholder="Ej: Tiempo promedio de reparación de contenedores"
+                      value={k.nombre} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], nombre: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field full">
+                    <label>Fórmula de cálculo</label>
+                    <input placeholder="Ej: Horas totales ÷ N° equipos reparados"
+                      value={k.formula} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], formula: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field">
+                    <label>Meta acordada</label>
+                    <input placeholder="Ej: ≤ 10 horas promedio"
+                      value={k.meta} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], meta: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field">
+                    <label>Fuente de datos</label>
+                    <input placeholder="Ej: Registro de órdenes de trabajo"
+                      value={k.fuente} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], fuente: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field">
+                    <label>Peso % (todos suman 100)</label>
+                    <input type="number" min="0" max="100" placeholder="Ej: 30"
+                      value={k.peso} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], peso: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field">
+                    <label>Línea base (valor actual)</label>
+                    <input placeholder="Ej: 12 horas promedio 2024"
+                      value={k.base} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], base: e.target.value }; setKpis(n) }} />
+                  </div>
+                  <div className="form-field">
+                    <label>Período de medición</label>
+                    <select value={k.periodo} onChange={e => { const n = [...kpis]; n[i] = { ...n[i], periodo: e.target.value }; setKpis(n) }}>
+                      <option value="">Seleccionar…</option>
+                      <option>Trimestral</option><option>Semestral</option><option>Anual</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {fase === 'fase2' && (
+        <>
+          <div className="alert alert-info">
+            <strong>Fase 2 — Cierre del período:</strong> Ingresa el resultado real y el % de cumplimiento. La calificación se asigna automáticamente.
+          </div>
+          {kpis.map((k, i) => {
+            const cal = calificacion(resultados[i].pct)
+            const peso = parseFloat(k.peso) || 0
+            const ponderado = cal && peso ? (cal * peso / 100).toFixed(3) : '—'
+            return (
+              <div className="card" key={i} style={{ marginBottom: 16 }}>
+                <div className="card-header" style={{ background: '#1a3d6b' }}>
+                  <h2>KPI {i + 1}{k.nombre ? `: ${k.nombre}` : ''}</h2>
+                </div>
+                <div className="card-body">
+                  <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--gray)' }}>
+                    <strong>Meta:</strong> {k.meta || '—'} &nbsp;·&nbsp; <strong>Peso:</strong> {k.peso || '—'}%
+                  </div>
+                  <div className="form-grid">
+                    <div className="form-field">
+                      <label>Resultado real obtenido</label>
+                      <input placeholder="Ej: 9.2 horas promedio"
+                        value={resultados[i].real}
+                        onChange={e => { const n = [...resultados]; n[i] = { ...n[i], real: e.target.value }; setResultados(n) }} />
+                    </div>
+                    <div className="form-field">
+                      <label>% de Cumplimiento de la meta</label>
+                      <input type="number" placeholder="Ej: 108"
+                        value={resultados[i].pct}
+                        onChange={e => { const n = [...resultados]; n[i] = { ...n[i], pct: e.target.value }; setResultados(n) }} />
+                    </div>
+                  </div>
+                  {cal && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, padding: '10px 14px', background: 'var(--cream)', borderRadius: 8 }}>
+                      <div className={`score-badge sb-${cal}`}>{cal}</div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>
+                          {['Insatisfactorio', 'Por debajo', 'Cumple', 'Por encima', 'Excepcional'][cal - 1]}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--gray)' }}>Ponderado: {ponderado}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          <div className="card">
+            <div className="card-header" style={{ background: '#1a3d6b' }}>
+              <h2>Resultado Final KPIs</h2>
+            </div>
+            <div className="card-body">
+              <div className="form-field">
+                <label>Comentarios sobre los resultados (contexto, factores externos, etc.)</label>
+                <textarea value={comentario} onChange={e => setComentario(e.target.value)} placeholder="Factores que facilitaron o dificultaron el logro de las metas…" />
+              </div>
+            </div>
+            <div className="total-bar">
+              <div className="lbl">Puntaje Final KPIs</div>
+              <div style={{ textAlign: 'right' }}>
+                <div className="val">{puntajeFinal().toFixed(2)} / 5.0</div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}
+        style={{ width: '100%', justifyContent: 'center', padding: 14, fontSize: 14, marginTop: 8 }}>
+        {saving ? 'Guardando…' : `Guardar ${fase === 'fase1' ? 'acuerdo de metas' : 'resultados KPIs'} ✓`}
+      </button>
+    </div>
+  )
+}
+
+// ── Página principal ───────────────────────────────────────────────────────
+export default function Evaluar() {
+  const router = useRouter()
+  const { evaluado_id, evaluador_nombre, tipo, ciclo_id } = router.query
+  const [evaluado, setEvaluado] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [selectedCiclo, setSelectedCiclo] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+  const [savedScore, setSavedScore] = useState(null)
 
-  // Formularios
-  const [newColab, setNewColab] = useState({ nombre: '', cargo: '', area: '', sede: 'Medellín', nivel: 'Operativo' })
-  const [newCiclo, setNewCiclo] = useState({ nombre: '', periodo: '' })
-  const [msg, setMsg] = useState({ type: '', text: '' })
+  const tipoLabels = {
+    autoevaluacion: 'Autoevaluación',
+    jefe: 'Evaluación de Jefe Inmediato',
+    par: 'Evaluación de Pares',
+    kpi: 'Acuerdo / Evaluación de KPIs'
+  }
 
   useEffect(() => {
-    loadAll()
-  }, [])
+    if (!evaluado_id) return
+    supabase.from('colaboradores').select('*').eq('id', evaluado_id).single()
+      .then(({ data }) => { setEvaluado(data); setLoading(false) })
+  }, [evaluado_id])
 
-  async function loadAll() {
-    setLoading(true)
-    const [{ data: cols }, { data: cics }, { data: evals }] = await Promise.all([
-      supabase.from('colaboradores').select('*').order('nombre'),
-      supabase.from('ciclos').select('*').order('created_at', { ascending: false }),
-      supabase.from('evaluaciones').select('*, colaboradores(nombre,cargo,nivel,sede)').order('created_at', { ascending: false }),
-    ])
-    setColaboradores(cols || [])
-    setCiclos(cics || [])
-    setEvaluaciones(evals || [])
-    if (cics && cics.length > 0) setSelectedCiclo(cics[0].id)
-    setLoading(false)
+  async function handleSubmit(datos) {
+    setSaving(true)
+    const { error } = await supabase.from('evaluaciones').insert({
+      ciclo_id,
+      evaluado_id,
+      evaluador_nombre,
+      tipo,
+      puntaje_final: datos.puntaje_final,
+      datos,
+      completada: true
+    })
+    setSaving(false)
+    if (error) { alert('Error al guardar: ' + error.message); return }
+    setSavedScore(datos.puntaje_final)
+    setDone(true)
   }
 
-  function showMsg(type, text) {
-    setMsg({ type, text })
-    setTimeout(() => setMsg({ type: '', text: '' }), 3500)
-  }
+  if (!router.isReady || loading) return (
+    <><Header /><div className="page-wrap" style={{ textAlign: 'center', paddingTop: 80 }}><p style={{ color: 'var(--gray)' }}>Cargando…</p></div></>
+  )
 
-  async function addColaborador() {
-    if (!newColab.nombre || !newColab.cargo) { showMsg('error', 'Nombre y cargo son obligatorios.'); return }
-    const { error } = await supabase.from('colaboradores').insert(newColab)
-    if (error) { showMsg('error', 'Error: ' + error.message); return }
-    showMsg('success', `✅ ${newColab.nombre} agregado correctamente.`)
-    setNewColab({ nombre: '', cargo: '', area: '', sede: 'Medellín', nivel: 'Operativo' })
-    loadAll()
-  }
-
-  async function toggleActivo(id, activo) {
-    await supabase.from('colaboradores').update({ activo: !activo }).eq('id', id)
-    loadAll()
-  }
-
-  async function addCiclo() {
-    if (!newCiclo.nombre || !newCiclo.periodo) { showMsg('error', 'Nombre y período son obligatorios.'); return }
-    const { error } = await supabase.from('ciclos').insert({ ...newCiclo, activo: true })
-    if (error) { showMsg('error', 'Error: ' + error.message); return }
-    showMsg('success', '✅ Ciclo creado correctamente.')
-    setNewCiclo({ nombre: '', periodo: '' })
-    loadAll()
-  }
-
-  async function toggleCiclo(id, activo) {
-    await supabase.from('ciclos').update({ activo: !activo }).eq('id', id)
-    loadAll()
-  }
-
-  // Reportes
-  const evalsCiclo = evaluaciones.filter(e => e.ciclo_id === selectedCiclo)
-  const colabsConEval = colaboradores.map(c => {
-    const evals = evalsCiclo.filter(e => e.evaluado_id === c.id && e.completada)
-    const tipos = { autoevaluacion: 0, jefe: 0, par: 0, kpi: 0 }
-    evals.forEach(e => tipos[e.tipo] = (tipos[e.tipo] || 0) + 1)
-    const consolidado = calcConsolidado(evals, c.nivel)
-    return { ...c, evals, tipos, consolidado }
-  })
-
-  const tipoLabels = { autoevaluacion: 'Auto', jefe: 'Jefe', par: 'Par', kpi: 'KPI' }
-  const tipoColors = { autoevaluacion: 'var(--teal)', jefe: 'var(--blue)', par: 'var(--purple)', kpi: 'var(--green)' }
-
-  function ScoreBadge({ score }) {
-    if (!score) return <span style={{ color: 'var(--gray)', fontSize: 12 }}>—</span>
-    const s = parseFloat(score)
-    const colors = { 5: '#145a32', 4: '#27ae60', 3: '#2471a3', 2: '#e67e22', 1: '#c0392b' }
-    const n = s >= 4.5 ? 5 : s >= 3.5 ? 4 : s >= 2.5 ? 3 : s >= 1.5 ? 2 : 1
+  if (done) {
+    function getCategoria(s) {
+      if (s >= 4.5) return { label: 'Excepcional', emoji: '⭐' }
+      if (s >= 3.5) return { label: 'Alto Desempeño', emoji: '🏆' }
+      if (s >= 2.5) return { label: 'Satisfactorio', emoji: '✅' }
+      if (s >= 1.5) return { label: 'En Mejora', emoji: '📈' }
+      return { label: 'Crítico', emoji: '⚠️' }
+    }
+    const cat = savedScore ? getCategoria(savedScore) : null
     return (
-      <span style={{ background: colors[n], color: 'white', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'Syne' }}>
-        {s}
-      </span>
+      <><Header />
+      <div className="page-wrap" style={{ textAlign: 'center', paddingTop: 60 }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
+        <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 24, color: 'var(--navy)', marginBottom: 8 }}>
+          ¡Evaluación enviada con éxito!
+        </div>
+        {savedScore > 0 && cat && (
+          <div style={{ background: 'var(--cyan)', color: 'white', borderRadius: 12, padding: '16px 28px', display: 'inline-block', marginBottom: 20 }}>
+            <div style={{ fontFamily: 'Syne', fontSize: 32, fontWeight: 800 }}>{savedScore.toFixed(2)} / 5.0</div>
+            <div style={{ fontSize: 14, opacity: .85 }}>{cat.emoji} {cat.label}</div>
+          </div>
+        )}
+        <p style={{ color: 'var(--gray)', marginBottom: 28, maxWidth: 440, margin: '0 auto 28px' }}>
+          Gracias por completar la {tipoLabels[tipo]} de <strong>{evaluado?.nombre}</strong>. Talento Humano procesará los resultados.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <button className="btn btn-primary" onClick={() => router.push('/')}>← Hacer otra evaluación</button>
+          <button className="btn btn-navy" onClick={() => router.push('/admin')}>Ver panel TH</button>
+        </div>
+      </div></>
     )
   }
 
-  if (loading) return (
-    <><Header adminMode /><div className="page-wrap" style={{ textAlign: 'center', paddingTop: 80 }}><p style={{ color: 'var(--gray)' }}>Cargando datos…</p></div></>
-  )
-
   return (
-    <>
-      <Header adminMode />
-      <div className="page-wrap-wide">
-        <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 22, color: 'var(--navy)', margin: '20px 0 6px' }}>
-          Panel de Talento Humano
+    <><Header />
+    <div className="page-wrap">
+      {/* Info header */}
+      <div style={{ background: 'var(--navy)', borderRadius: 12, padding: '20px 24px', marginBottom: 24, color: 'white' }}>
+        <div style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
+          {tipoLabels[tipo]}
         </div>
-        <p style={{ color: 'var(--gray)', marginBottom: 24 }}>Administración de colaboradores, ciclos y resultados de evaluación.</p>
-
-        {msg.text && <div className={`alert alert-${msg.type} mb-4`}>{msg.text}</div>}
-
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '2px solid var(--border)' }}>
-          {[
-            ['dashboard', '📊 Resultados'],
-            ['colaboradores', '👥 Colaboradores'],
-            ['ciclos', '🗓 Ciclos'],
-            ['detalle', '🔍 Detalle evaluaciones'],
-          ].map(([t, lbl]) => (
-            <button key={t} type="button" onClick={() => setTab(t)}
-              style={{
-                padding: '10px 18px', border: 'none', background: 'none', cursor: 'pointer',
-                fontFamily: 'Syne', fontWeight: 700, fontSize: 12, letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: tab === t ? 'var(--teal)' : 'var(--gray)',
-                borderBottom: tab === t ? '3px solid var(--teal)' : '3px solid transparent',
-                marginBottom: -2
-              }}>
-              {lbl}
-            </button>
-          ))}
+        <div style={{ display: 'flex', gap: 24, fontSize: 13, flexWrap: 'wrap' }}>
+          <span>👤 <strong>Evaluado:</strong> {evaluado?.nombre} — {evaluado?.cargo}</span>
+          <span>✍️ <strong>Evaluador:</strong> {evaluador_nombre}</span>
+          <span>📍 <strong>Sede:</strong> {evaluado?.sede}</span>
         </div>
-
-        {/* ── DASHBOARD ── */}
-        {tab === 'dashboard' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-              <label style={{ fontWeight: 700, fontSize: 13 }}>Ciclo:</label>
-              <select value={selectedCiclo} onChange={e => setSelectedCiclo(e.target.value)}
-                style={{ border: '1.5px solid var(--border)', borderRadius: 8, padding: '8px 14px', fontFamily: 'DM Sans', fontSize: 14 }}>
-                {ciclos.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.periodo}</option>)}
-              </select>
-              <span style={{ fontSize: 13, color: 'var(--gray)' }}>{evalsCiclo.length} evaluaciones registradas</span>
-            </div>
-
-            {/* KPIs resumen */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-              {[
-                ['Colaboradores', colaboradores.filter(c => c.activo).length, 'var(--navy)', '👥'],
-                ['Evaluaciones totales', evalsCiclo.length, 'var(--teal)', '📝'],
-                ['Completadas', evalsCiclo.filter(e => e.completada).length, 'var(--green)', '✅'],
-                ['Pendientes', Math.max(0, colaboradores.filter(c=>c.activo).length * 4 - evalsCiclo.length), 'var(--gold)', '⏳'],
-              ].map(([lbl, val, color, ico]) => (
-                <div key={lbl} style={{ background: 'white', borderRadius: 12, padding: '20px 20px', boxShadow: '0 2px 10px rgba(0,0,0,.07)', borderLeft: `5px solid ${color}` }}>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>{ico}</div>
-                  <div style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 26, color }}>{val}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray)', marginTop: 4 }}>{lbl}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Tabla de resultados por colaborador */}
-            <div className="card">
-              <div className="card-header" style={{ background: 'var(--navy)' }}>
-                <h2>Resultados consolidados por colaborador</h2>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Colaborador</th>
-                      <th>Cargo / Nivel</th>
-                      <th>Sede</th>
-                      <th style={{ textAlign: 'center' }}>Auto</th>
-                      <th style={{ textAlign: 'center' }}>Jefe</th>
-                      <th style={{ textAlign: 'center' }}>Pares</th>
-                      <th style={{ textAlign: 'center' }}>KPIs</th>
-                      <th style={{ textAlign: 'center' }}>Consolidado</th>
-                      <th>Categoría</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {colabsConEval.filter(c => c.activo).map(c => {
-                      const cat = c.consolidado ? getCategoria(parseFloat(c.consolidado)) : null
-                      return (
-                        <tr key={c.id}>
-                          <td style={{ fontWeight: 600 }}>{c.nombre}</td>
-                          <td>
-                            <div style={{ fontSize: 13 }}>{c.cargo}</div>
-                            <span className={`chip chip-${c.nivel?.toLowerCase().slice(0,3) === 'ope' ? 'op' : c.nivel?.toLowerCase().slice(0,3) === 'adm' ? 'adm' : 'ger'}`}>
-                              {c.nivel}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--gray)' }}>{c.sede}</td>
-                          {['autoevaluacion', 'jefe', 'par', 'kpi'].map(t => {
-                            const evsTipo = c.evals.filter(e => e.tipo === t)
-                            const promTipo = evsTipo.length ? (evsTipo.reduce((s, e) => s + (e.puntaje_final || 0), 0) / evsTipo.length).toFixed(2) : null
-                            return (
-                              <td key={t} style={{ textAlign: 'center' }}>
-                                {promTipo ? <ScoreBadge score={promTipo} /> : <span className="chip chip-pend">Pendiente</span>}
-                                {evsTipo.length > 1 && <div style={{ fontSize: 10, color: 'var(--gray)' }}>{evsTipo.length} eval.</div>}
-                              </td>
-                            )
-                          })}
-                          <td style={{ textAlign: 'center' }}>
-                            {c.consolidado ? (
-                              <span style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: 16, color: 'var(--navy)' }}>
-                                {c.consolidado}
-                              </span>
-                            ) : <span style={{ color: 'var(--gray)' }}>—</span>}
-                          </td>
-                          <td>{cat ? <span>{cat.emoji} {cat.label}</span> : <span style={{ color: 'var(--gray)', fontSize: 12 }}>Sin datos</span>}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── COLABORADORES ── */}
-        {tab === 'colaboradores' && (
-          <div>
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div className="card-header" style={{ background: 'var(--teal)' }}>
-                <h2>Agregar colaborador</h2>
-              </div>
-              <div className="card-body">
-                <div className="form-grid">
-                  <div className="form-field">
-                    <label>Nombre completo *</label>
-                    <input placeholder="Ej: María González Torres" value={newColab.nombre} onChange={e => setNewColab({ ...newColab, nombre: e.target.value })} />
-                  </div>
-                  <div className="form-field">
-                    <label>Cargo *</label>
-                    <input placeholder="Ej: Técnico de Mantenimiento" value={newColab.cargo} onChange={e => setNewColab({ ...newColab, cargo: e.target.value })} />
-                  </div>
-                  <div className="form-field">
-                    <label>Área</label>
-                    <input placeholder="Ej: Taller de Mantenimiento" value={newColab.area} onChange={e => setNewColab({ ...newColab, area: e.target.value })} />
-                  </div>
-                  <div className="form-field">
-                    <label>Sede</label>
-                    <select value={newColab.sede} onChange={e => setNewColab({ ...newColab, sede: e.target.value })}>
-                      {['Medellín','Barranquilla','Urabá','Santa Marta','Cartagena','Buenaventura'].map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-field">
-                    <label>Nivel</label>
-                    <select value={newColab.nivel} onChange={e => setNewColab({ ...newColab, nivel: e.target.value })}>
-                      {['Operativo','Administrativo','Gerencial'].map(n => <option key={n}>{n}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <button className="btn btn-primary mt-4" onClick={addColaborador}>+ Agregar colaborador</button>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header" style={{ background: 'var(--navy)' }}>
-                <h2>{colaboradores.length} colaboradores registrados</h2>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Nombre</th><th>Cargo</th><th>Área</th><th>Sede</th><th>Nivel</th><th style={{ textAlign: 'center' }}>Estado</th><th style={{ textAlign: 'center' }}>Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {colaboradores.map(c => (
-                      <tr key={c.id}>
-                        <td style={{ fontWeight: 600 }}>{c.nombre}</td>
-                        <td>{c.cargo}</td>
-                        <td style={{ color: 'var(--gray)', fontSize: 13 }}>{c.area}</td>
-                        <td style={{ fontSize: 13 }}>{c.sede}</td>
-                        <td><span className={`chip chip-${c.nivel === 'Operativo' ? 'op' : c.nivel === 'Administrativo' ? 'adm' : 'ger'}`}>{c.nivel}</span></td>
-                        <td style={{ textAlign: 'center' }}>
-                          <span className={`chip ${c.activo ? 'chip-ok' : 'chip-pend'}`}>{c.activo ? 'Activo' : 'Inactivo'}</span>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <button className={`btn btn-sm ${c.activo ? 'btn-ghost' : 'btn-primary'}`} onClick={() => toggleActivo(c.id, c.activo)}>
-                            {c.activo ? 'Desactivar' : 'Activar'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── CICLOS ── */}
-        {tab === 'ciclos' && (
-          <div>
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div className="card-header" style={{ background: 'var(--green)' }}>
-                <h2>Crear ciclo de evaluación</h2>
-              </div>
-              <div className="card-body">
-                <div className="form-grid">
-                  <div className="form-field">
-                    <label>Nombre del ciclo *</label>
-                    <input placeholder="Ej: Evaluación Anual 2025" value={newCiclo.nombre} onChange={e => setNewCiclo({ ...newCiclo, nombre: e.target.value })} />
-                  </div>
-                  <div className="form-field">
-                    <label>Período *</label>
-                    <input placeholder="Ej: Enero – Diciembre 2025" value={newCiclo.periodo} onChange={e => setNewCiclo({ ...newCiclo, periodo: e.target.value })} />
-                  </div>
-                </div>
-                <button className="btn btn-primary mt-4" onClick={addCiclo}>+ Crear ciclo</button>
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-header" style={{ background: 'var(--navy)' }}>
-                <h2>Ciclos registrados</h2>
-              </div>
-              <table className="data-table">
-                <thead><tr><th>Nombre</th><th>Período</th><th>Estado</th><th>Evaluaciones</th><th>Acción</th></tr></thead>
-                <tbody>
-                  {ciclos.map(c => (
-                    <tr key={c.id}>
-                      <td style={{ fontWeight: 600 }}>{c.nombre}</td>
-                      <td>{c.periodo}</td>
-                      <td><span className={`chip ${c.activo ? 'chip-ok' : 'chip-pend'}`}>{c.activo ? 'Activo' : 'Cerrado'}</span></td>
-                      <td>{evaluaciones.filter(e => e.ciclo_id === c.id).length}</td>
-                      <td>
-                        <button className={`btn btn-sm ${c.activo ? 'btn-ghost' : 'btn-primary'}`} onClick={() => toggleCiclo(c.id, c.activo)}>
-                          {c.activo ? 'Cerrar ciclo' : 'Reabrir'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── DETALLE ── */}
-        {tab === 'detalle' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
-              <label style={{ fontWeight: 700, fontSize: 13 }}>Ciclo:</label>
-              <select value={selectedCiclo} onChange={e => setSelectedCiclo(e.target.value)}
-                style={{ border: '1.5px solid var(--border)', borderRadius: 8, padding: '8px 14px', fontFamily: 'DM Sans', fontSize: 14 }}>
-                {ciclos.map(c => <option key={c.id} value={c.id}>{c.nombre} — {c.periodo}</option>)}
-              </select>
-            </div>
-            <div className="card">
-              <div className="card-header" style={{ background: 'var(--navy)' }}>
-                <h2>Todas las evaluaciones del ciclo</h2>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Evaluado</th><th>Tipo</th><th>Evaluador</th><th>Puntaje</th><th>Fecha</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {evalsCiclo.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--gray)', padding: 28 }}>No hay evaluaciones en este ciclo aún.</td></tr>
-                    )}
-                    {evalsCiclo.map(e => (
-                      <tr key={e.id}>
-                        <td style={{ fontWeight: 600 }}>{e.colaboradores?.nombre || '—'}<div style={{ fontSize: 11, color: 'var(--gray)' }}>{e.colaboradores?.cargo}</div></td>
-                        <td>
-                          <span style={{ background: tipoColors[e.tipo] || '#ccc', color: 'white', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
-                            {tipoLabels[e.tipo] || e.tipo}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 13 }}>{e.evaluador_nombre}</td>
-                        <td>{e.puntaje_final > 0 ? <span style={{ fontFamily: 'Syne', fontWeight: 700 }}>{e.puntaje_final?.toFixed(2)}</span> : '—'}</td>
-                        <td style={{ fontSize: 12, color: 'var(--gray)' }}>{new Date(e.created_at).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-    </>
+
+      {tipo === 'autoevaluacion' && <FormAutoeval evaluado={evaluado} onSubmit={handleSubmit} saving={saving} />}
+      {tipo === 'jefe' && <FormJefe evaluado={evaluado} onSubmit={handleSubmit} saving={saving} />}
+      {tipo === 'par' && <FormPares evaluado={evaluado} onSubmit={handleSubmit} saving={saving} />}
+      {tipo === 'kpi' && <FormKPI evaluado={evaluado} onSubmit={handleSubmit} saving={saving} />}
+    </div></>
   )
 }
