@@ -84,7 +84,7 @@ function FormAutoeval({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header" style={{ background: 'var(--teal)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
           <h2>A. Competencias Organizacionales</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -96,7 +96,7 @@ function FormAutoeval({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--teal)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
           <h2>B. Competencias Técnicas</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -108,7 +108,7 @@ function FormAutoeval({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--teal)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan)' }}>
           <h2>Reflexión Personal</h2>
         </div>
         <div className="card-body">
@@ -164,7 +164,7 @@ function FormJefe({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header" style={{ background: 'var(--blue)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
           <h2>A. Competencias Organizacionales (40%)</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -176,7 +176,7 @@ function FormJefe({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--blue)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
           <h2>B. Competencias Técnicas y de Gestión (35%)</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -188,7 +188,7 @@ function FormJefe({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--blue)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
           <h2>C. Liderazgo y Gestión de Personas (25%)</h2>
         </div>
         <div className="card-body">
@@ -211,7 +211,7 @@ function FormJefe({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--blue)' }}>
+        <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
           <h2>Comentarios del Evaluador</h2>
         </div>
         <div className="card-body">
@@ -264,7 +264,7 @@ function FormPares({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <div className="card-header" style={{ background: 'var(--purple)' }}>
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
           <h2>A. Trabajo en Equipo y Colaboración (50%)</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -276,7 +276,7 @@ function FormPares({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--purple)' }}>
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
           <h2>B. Desempeño Observable Día a Día (50%)</h2>
         </div>
         <div className="card-body" style={{ padding: '8px 24px' }}>
@@ -288,7 +288,7 @@ function FormPares({ evaluado, onSubmit, saving }) {
       </div>
 
       <div className="card">
-        <div className="card-header" style={{ background: 'var(--purple)' }}>
+        <div className="card-header" style={{ background: 'var(--navy)' }}>
           <h2>Retroalimentación Abierta (Anónima)</h2>
         </div>
         <div className="card-body">
@@ -380,7 +380,7 @@ function FormKPI({ evaluado, onSubmit, saving }) {
           </div>
           {kpis.map((k, i) => (
             <div className="card" key={i} style={{ marginBottom: 16 }}>
-              <div className="card-header" style={{ background: 'var(--green)' }}>
+              <div className="card-header" style={{ background: 'var(--cyan-dark)' }}>
                 <h2>KPI {i + 1}</h2>
               </div>
               <div className="card-body">
@@ -566,7 +566,7 @@ export default function Evaluar() {
           ¡Evaluación enviada con éxito!
         </div>
         {savedScore > 0 && cat && (
-          <div style={{ background: 'var(--teal)', color: 'white', borderRadius: 12, padding: '16px 28px', display: 'inline-block', marginBottom: 20 }}>
+          <div style={{ background: 'var(--cyan)', color: 'white', borderRadius: 12, padding: '16px 28px', display: 'inline-block', marginBottom: 20 }}>
             <div style={{ fontFamily: 'Syne', fontSize: 32, fontWeight: 800 }}>{savedScore.toFixed(2)} / 5.0</div>
             <div style={{ fontSize: 14, opacity: .85 }}>{cat.emoji} {cat.label}</div>
           </div>
