@@ -30,10 +30,10 @@ export default function Home() {
   }, [])
 
   const tiposEval = [
-    { value: 'autoevaluacion', label: 'Autoevaluación', desc: 'Evalúas tu propio desempeño', color: '#1a7a6e', icon: '👤' },
-    { value: 'jefe', label: 'Evaluación de Jefe', desc: 'Evalúas a un colaborador a tu cargo', color: '#2c4a8a', icon: '👔' },
-    { value: 'par', label: 'Evaluación de Par', desc: 'Evalúas a un compañero de trabajo', color: '#5c3d8f', icon: '🤝' },
-    { value: 'kpi', label: 'Acuerdo / Evaluación KPIs', desc: 'Registrar o evaluar indicadores de gestión', color: '#1a6b4a', icon: '📊' },
+    { value: 'autoevaluacion', label: 'Autoevaluación', desc: 'Evalúas tu propio desempeño', color: '#00AEEF', icon: '👤' },
+    { value: 'jefe', label: 'Evaluación de Jefe', desc: 'Evalúas a un colaborador a tu cargo', color: '#0077cc', icon: '👔' },
+    { value: 'par', label: 'Evaluación de Par', desc: 'Evalúas a un compañero de trabajo', color: '#1a2533', icon: '🤝' },
+    { value: 'kpi', label: 'Acuerdo / Evaluación KPIs', desc: 'Registrar o evaluar indicadores de gestión', color: '#00AEEF', icon: '📊' },
   ]
 
   function handleStart() {
@@ -61,7 +61,7 @@ export default function Home() {
             Sistema de Evaluación de Desempeño
           </div>
           <p style={{ color: 'var(--gray)', fontSize: 15 }}>
-            Período 2025 · OLINSA S.A.S. · Medellín, Barranquilla, Urabá, Santa Marta, Cartagena, Buenaventura
+            Período 2026 · OLINSA S.A.S. · Medellín, Barranquilla, Urabá, Santa Marta, Cartagena, Buenaventura
           </p>
         </div>
 
@@ -159,7 +159,7 @@ export default function Home() {
 
         {/* Escala */}
         <div className="card">
-          <div className="card-header" style={{ background: 'var(--teal)' }}>
+          <div className="card-header" style={{ background: 'var(--cyan)' }}>
             <h2>Escala de calificación</h2>
           </div>
           <div className="card-body" style={{ padding: '16px 24px' }}>
